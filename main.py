@@ -90,11 +90,32 @@ def build_sql_prompt(
     schema_text: str,
 ) -> str:
     """
-    Build the prompt that will be sent to the LLM
-    to generate a SQL query.
+    Build a prompt that instructs the LLM to generate
+    a safe, read-only SQL query based on the schema.
     """
-    # Placeholder — logic will be implemented in Step 5
-    return ""
+    prompt = f"""
+You are an expert data analyst.
+
+Your task is to write a SQL query that answers the user's question
+using the database schema provided below.
+
+RULES:
+- Use ONLY the tables and columns shown in the schema
+- Use valid SQLite SQL syntax
+- Generate a SINGLE SQL query
+- Do NOT include explanations or comments
+- Do NOT modify data (no INSERT, UPDATE, DELETE, DROP)
+
+DATABASE SCHEMA:
+{schema_text}
+
+USER QUESTION:
+{user_question}
+
+SQL QUERY:
+""".strip()
+
+    return prompt
 
 
 # ============================================================
