@@ -47,11 +47,38 @@ def connect_to_db(db_path: Path) -> sqlite3.Connection:
 
 def get_schema_text(conn: sqlite3.Connection) -> str:
     """
-    Extract table and column information from the database
-    and convert it into a text format suitable for LLM grounding.
+    Extract table and column information from the SQLite database
+    and return it as formatted text for LLM grounding.
     """
-    # Placeholder — logic will be implemented in Step 4
-    return ""
+    cursor = conn.cursor()
+
+    # Get all user-defined tables
+    cursor.execute("""
+        SELECT name
+        FROM sqlite_master
+        WHERE type='table'
+        AND name NOT LIKE 'sqlite_%';
+    """)
+    tables = [row[0] for row in cursor.fetchall()]
+
+    schema_lines = []
+
+    for table in tables:
+        schema_lines.append(f"Table: {table}")
+
+        cursor.execute(f"PRAGMA table_info({table});")
+        columns = cursor.fetchall()
+
+        schema_lines.append("Columns:")
+        for col in columns:
+            col_name = col[1]
+            col_type = col[2]
+            schema_lines.append(f"- {col_name} ({col_type})")
+
+        schema_lines.append("")  # blank line between tables
+
+    return "\n".join(schema_lines)
+
 
 
 # ============================================================
