@@ -1,231 +1,231 @@
-"""
-NL2SQL From Scratch
-===================
-
-This file implements a step-by-step Natural Language to SQL (NL2SQL) pipeline.
-
-IMPORTANT DESIGN PRINCIPLES:
-- Linear execution (not agent-based)
-- No hidden chains or magic helpers
-- Every step is explicit and inspectable
-- SQL is treated as untrusted output
-- Clarity > cleverness
-
-The goal is NOT to build a production system.
-The goal is to make the NL2SQL reasoning process visible.
-"""
-
-# ============================================================
-# Step 1: Load environment and dependencies
-# ============================================================
-
+import os
 import sqlite3
-from pathlib import Path
+import re
 from typing import List, Tuple
 
-# (LLM-related imports will be added later)
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+load_dotenv()
 
 
 # ============================================================
-# Step 2: Connect to the SQLite database
+# STEP 0: Gemini Configuration
 # ============================================================
 
-DB_PATH = Path("data/sample.db")
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+GEMINI_MODEL = "models/gemini-flash-latest"
 
-def connect_to_db(db_path: Path) -> sqlite3.Connection:
-    """
-    Create a connection to the SQLite database.
-    """
-    if not db_path.exists():
-        raise FileNotFoundError(f"Database not found at {db_path}")
+
+
+# ============================================================
+# STEP 1: Database Connection
+# ============================================================
+
+DB_PATH = "data/sample.db"
+
+
+def connect_db(db_path: str) -> sqlite3.Connection:
     return sqlite3.connect(db_path)
 
 
 # ============================================================
-# Step 3: Inspect and extract database schema
+# STEP 2: Schema Extraction (Explicit Grounding)
 # ============================================================
 
-def get_schema_text(conn: sqlite3.Connection) -> str:
-    """
-    Extract table and column information from the SQLite database
-    and return it as formatted text for LLM grounding.
-    """
+def extract_schema(conn: sqlite3.Connection) -> str:
     cursor = conn.cursor()
 
-    # Get all user-defined tables
-    cursor.execute("""
-        SELECT name
-        FROM sqlite_master
-        WHERE type='table'
-        AND name NOT LIKE 'sqlite_%';
-    """)
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
+    )
     tables = [row[0] for row in cursor.fetchall()]
 
-    schema_lines = []
+    schema_description = []
 
     for table in tables:
-        schema_lines.append(f"Table: {table}")
-
         cursor.execute(f"PRAGMA table_info({table});")
         columns = cursor.fetchall()
 
-        schema_lines.append("Columns:")
-        for col in columns:
-            col_name = col[1]
-            col_type = col[2]
-            schema_lines.append(f"- {col_name} ({col_type})")
+        cols = ", ".join(
+            [f"{col[1]} ({col[2]})" for col in columns]
+        )
 
-        schema_lines.append("")  # blank line between tables
+        schema_description.append(f"Table {table}: {cols}")
 
-    return "\n".join(schema_lines)
-
+    return "\n".join(schema_description)
 
 
 # ============================================================
-# Step 4: Construct the SQL generation prompt
+# STEP 3: Prompt Construction
 # ============================================================
 
-def build_sql_prompt(
-    user_question: str,
-    schema_text: str,
-) -> str:
-    """
-    Build a prompt that instructs the LLM to generate
-    a safe, read-only SQL query based on the schema.
-    """
-    prompt = f"""
+def build_prompt(user_question: str, schema: str) -> str:
+    return f"""
 You are an expert data analyst.
 
-Your task is to write a SQL query that answers the user's question
-using the database schema provided below.
+Given the following SQLite database schema:
+{schema}
 
-RULES:
-- Use ONLY the tables and columns shown in the schema
-- Use valid SQLite SQL syntax
-- Generate a SINGLE SQL query
-- Do NOT include explanations or comments
-- Do NOT modify data (no INSERT, UPDATE, DELETE, DROP)
+Write a SINGLE valid SQLite SELECT query that answers the question below.
+Rules:
+- Use ONLY the tables and columns provided.
+- Use SELECT only.
+- No explanations.
+- No markdown.
+- No comments.
 
-DATABASE SCHEMA:
-{schema_text}
-
-USER QUESTION:
+Question:
 {user_question}
-
-SQL QUERY:
 """.strip()
-
-    return prompt
 
 
 # ============================================================
-# Step 5: Generate SQL using the LLM
+# STEP 4: NL → SQL (Gemini Boundary)
 # ============================================================
 
 def generate_sql(prompt: str) -> str:
-    """
-    Call the LLM to generate a SQL query.
-    The output of this function is UNTRUSTED text.
-    """
-    # Placeholder — logic will be implemented in Step 6
-    return ""
+    model = genai.GenerativeModel(GEMINI_MODEL)
+
+    response = model.generate_content(
+        prompt,
+        generation_config={
+            "temperature": 0.0,
+            "max_output_tokens": 512
+        }
+    )
+
+    raw_output = response.text.strip()
+    sql = re.sub(r"```sql|```", "", raw_output).strip()
+
+    print("\n--- GENERATED SQL ---")
+    print(sql)
+
+    return sql
 
 
 # ============================================================
-# Step 6: Validate generated SQL
+# STEP 5: SQL Validation (Treat as Untrusted)
 # ============================================================
 
-def validate_sql(sql_query: str) -> None:
-    """
-    Perform basic validation on the generated SQL query.
-    This function should raise an error if the SQL is unsafe.
-    """
-    # Placeholder — logic will be implemented in Step 7
-    pass
+def validate_sql(sql: str) -> None:
+    normalized = sql.strip().lower()
+
+    forbidden_keywords = [
+        "insert", "update", "delete", "drop", "alter",
+        "truncate", "create", "replace", "attach", "detach"
+    ]
+
+    if not normalized.startswith("select"):
+        raise ValueError("Only SELECT queries are allowed.")
+
+    for keyword in forbidden_keywords:
+        if keyword in normalized:
+            raise ValueError(f"Forbidden SQL keyword detected: {keyword}")
+
+    if ";" in normalized[:-1]:
+        raise ValueError("Multiple SQL statements detected.")
+
+    print("\n--- SQL VALIDATION PASSED ---")
 
 
 # ============================================================
-# Step 7: Execute SQL against the database
+# STEP 6: SQL Execution
 # ============================================================
 
 def execute_sql(
-    conn: sqlite3.Connection,
-    sql_query: str,
-) -> List[Tuple]:
-    """
-    Execute the validated SQL query and return raw rows.
-    """
-    # Placeholder — logic will be implemented in Step 8
-    return []
+    conn: sqlite3.Connection, sql: str
+) -> Tuple[List[str], List[tuple]]:
+    cursor = conn.cursor()
+    cursor.execute(sql)
+
+    rows = cursor.fetchall()
+    columns = [desc[0] for desc in cursor.description]
+
+    print("\n--- SQL EXECUTION RESULT ---")
+    print("Columns:", columns)
+    print("Rows:", rows)
+
+    return columns, rows
 
 
 # ============================================================
-# Step 8: Rephrase SQL result into natural language
+# STEP 7: Result → Natural Language Answer
 # ============================================================
 
 def rephrase_answer(
-    user_question: str,
-    sql_query: str,
-    sql_result: List[Tuple],
+    question: str,
+    columns: List[str],
+    rows: List[tuple]
 ) -> str:
-    """
-    Convert raw SQL results into a human-readable answer.
-    """
-    # Placeholder — logic will be implemented in Step 9
-    return ""
+    if not rows:
+        return "No results found for the given question."
+
+    preview = "\n".join(
+        [", ".join(map(str, row)) for row in rows[:5]]
+    )
+
+    prompt = f"""
+User question:
+{question}
+
+Columns:
+{columns}
+
+Rows:
+{preview}
+
+Write a concise, clear natural language answer.
+Do not mention SQL, databases, or tables.
+""".strip()
+
+    model = genai.GenerativeModel(GEMINI_MODEL)
+
+    response = model.generate_content(
+        prompt,
+        generation_config={
+            "temperature": 0.2,
+            "max_output_tokens": 200
+        }
+    )
+
+    answer = response.text.strip()
+
+    print("\n--- FINAL ANSWER ---")
+    print(answer)
+
+    return answer
 
 
 # ============================================================
-# Step 9: Main execution flow (Notebook-style)
+# STEP 8: Main Execution Spine (Linear, Readable)
 # ============================================================
 
 def main():
-    print("=== NL2SQL From Scratch ===")
+    user_question = "What is the total revenue generated from all orders?"
 
-    # Example user input (will later be interactive)
-    user_question = "How many orders are there?"
+    print("\n=== USER QUESTION ===")
+    print(user_question)
 
-    print(f"\nUser Question:\n{user_question}")
+    conn = connect_db(DB_PATH)
 
-    # Connect to DB
-    conn = connect_to_db(DB_PATH)
-    print("\nConnected to database.")
+    schema = extract_schema(conn)
+    print("\n=== DATABASE SCHEMA ===")
+    print(schema)
 
-    # Extract schema
-    schema_text = get_schema_text(conn)
-    print("\nExtracted Schema:")
-    print(schema_text)
-
-    # Build prompt
-    prompt = build_sql_prompt(user_question, schema_text)
-    print("\nPrompt sent to LLM:")
+    prompt = build_prompt(user_question, schema)
+    print("\n=== CONSTRUCTED PROMPT ===")
     print(prompt)
 
-    # Generate SQL
-    sql_query = generate_sql(prompt)
-    print("\nGenerated SQL:")
-    print(sql_query)
+    sql = generate_sql(prompt)
+    validate_sql(sql)
 
-    # Validate SQL
-    validate_sql(sql_query)
-    print("\nSQL validation passed.")
+    columns, rows = execute_sql(conn, sql)
 
-    # Execute SQL
-    result = execute_sql(conn, sql_query)
-    print("\nRaw SQL Result:")
-    print(result)
-
-    # Rephrase answer
-    answer = rephrase_answer(user_question, sql_query, result)
-    print("\nFinal Answer:")
-    print(answer)
+    rephrase_answer(user_question, columns, rows)
 
     conn.close()
 
-
-# ============================================================
-# Entry point
-# ============================================================
 
 if __name__ == "__main__":
     main()
