@@ -102,7 +102,7 @@ The system follows a clear 7-step pipeline:
 
 ---
 
-## Database Schema
+##  Database Schema
 
 The SQLite database (`data/sample.db`) contains **five realistic transactional tables**:
 
@@ -131,7 +131,7 @@ nl2sql-from-scratch/
 
 ---
 
-## Environment Setup
+##  Environment Setup
 
 ### 1. Install Dependencies
 
@@ -147,7 +147,7 @@ Create a `.env` file in the project root:
 GEMINI_API_KEY=your_api_key_here
 ```
 
-> ⚠️ The `.env` file is intentionally **not committed** to GitHub.
+>  The `.env` file is intentionally **not committed** to GitHub.
 
 ### 3. Run the Project
 
@@ -179,7 +179,7 @@ The total revenue generated from all orders is $2,900.00.
 
 ---
 
-## 🔍 Why This Project Matters
+##  Why This Project Matters
 
 This repository is designed to demonstrate:
 
@@ -207,13 +207,103 @@ These could be added in the future, but were out of scope for this assignment.
 
 ---
 
-##  Summary
+##  Relationship to the Original Tutorial
 
-This project presents a **clean, minimal, and correct** implementation of an NL2SQL system that prioritizes:
+This project is directly inspired by the tutorial and blog post:
 
-* Transparency
-* Safety
-* Correctness
-* Engineering judgment
+**“Mastering Natural Language to SQL with LangChain (NL2SQL)” by FutureSmart AI**
 
-It is intentionally simple — and intentionally rigorous.
+That tutorial demonstrates how to build increasingly powerful NL2SQL systems using **LangChain abstractions**, covering topics such as:
+
+* SQL generation chains
+* Few-shot prompting
+* Dynamic few-shot example selection
+* Dynamic relevant table selection
+* Conversational memory for follow-up queries
+
+### What This Project Preserves
+
+This repository **preserves the core teaching goal** of the original tutorial:
+
+> Translating natural language questions into correct SQL queries and returning clear answers.
+
+Specifically, it faithfully retains:
+
+* The **NL → SQL → execution → answer** conceptual pipeline
+* The idea of **rephrasing raw SQL output** into user-friendly language
+* The focus on **relational databases and realistic schemas**
+
+### What This Project Intentionally Changes
+
+Unlike the original tutorial, this implementation:
+
+* **Removes LangChain abstractions** (`create_sql_query_chain`, tools, runnables)
+* **Implements every step manually** in plain Python
+* **Exposes all hidden steps** (schema grounding, prompt construction, SQL execution)
+* **Treats SQL as untrusted LLM output** and validates it before execution
+
+These changes were made intentionally to satisfy the internship assignment’s emphasis on:
+
+* System transparency
+* Safety and correctness
+* Readability in one sitting
+* Engineering judgment over framework usage
+
+---
+
+##  Why Advanced Blog Features Are Not Implemented
+
+The original blog goes beyond a basic NL2SQL system and introduces advanced capabilities. These are **acknowledged but intentionally not implemented** here:
+
+### Few-Shot Prompting
+
+* Useful for improving accuracy in complex or ambiguous schemas
+* Adds prompt complexity and abstraction
+* Not required for a small, well-defined schema
+
+### Dynamic Few-Shot Selection
+
+* Important at scale when many example types exist
+* Requires vector stores and semantic similarity logic
+* Considered an optimization, not a core requirement
+
+### Dynamic Relevant Table Selection
+
+* Essential for databases with 100+ tables
+* Reduces token usage and latency
+* Unnecessary for a compact transactional schema
+
+### Conversational Memory
+
+* Enables follow-up questions in chat-based interfaces
+* Requires state management and message history
+* Out of scope for a single-run, inspectable prototype
+
+These features are **deliberately excluded** to avoid scope creep and to keep the system focused on the core NL2SQL problem.
+
+---
+
+##  Possible Future Extensions
+
+If this project were extended beyond the scope of the assignment, the following enhancements would be natural next steps:
+
+* Adding few-shot examples to the SQL generation prompt
+* Implementing semantic example selection using embeddings
+* Dynamically selecting relevant tables before prompt construction
+* Introducing conversational memory for follow-up questions
+* Exposing the pipeline via a simple API or UI
+
+These extensions are conceptually aligned with the original blog and can be layered on top of the current design without changing its core structure.
+
+---
+
+##  Final Summary
+
+This project demonstrates a **minimal yet rigorous NL2SQL system** that prioritizes:
+
+* Explicit system design
+* Safe LLM integration
+* Deterministic execution
+* Clear reasoning over abstraction
+
+Rather than maximizing features, it maximizes **understandability and trust**, making it well-suited for evaluation in a GenAI prototyping context.
